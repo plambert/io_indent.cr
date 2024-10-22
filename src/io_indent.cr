@@ -71,24 +71,48 @@ class IO
 
     # Write Bytes to the wrapped `IO` object, indenting when starting a new line
     def write(slice : Bytes) : Nil
-      write String.new(slice)
-    end
-
-    # :nodoc:
-    def write(str : String) : Nil
-      pos = 0
-
-      while match = LINE_PATTERN.match(str, pos)
-        pos = match.end
-        if match[1]?
+      str = String.new(slice)
+      str.each_char do |char|
+        case char
+        when '\n'
+          @at_start_of_line = true
+        else
           if @at_start_of_line
             @io << @chars * @indent
             @at_start_of_line = false
           end
-          @io << match[1]
-        else
-          @io << '\n'
-          @at_start_of_line = true
+        end
+        @io << char
+      end
+    end
+
+    # :nodoc:
+    def write(str : String) : Nil
+      if str.single_byte_optimizable?
+        str.each_byte do |byte|
+          if byte == '\n'.ord
+            @at_start_of_line = true
+          elsif @at_start_of_line
+            @indent.times { @io << @chars }
+            @at_start_of_line = false
+          end
+          @io << byte.chr
+        end
+      else
+        pos = 0
+
+        while match = LINE_PATTERN.match(str, pos)
+          pos = match.end
+          if match[1]?
+            if @at_start_of_line
+              @io << @chars * @indent
+              @at_start_of_line = false
+            end
+            @io << match[1]
+          else
+            @io << '\n'
+            @at_start_of_line = true
+          end
         end
       end
     end
