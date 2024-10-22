@@ -21,7 +21,8 @@ class IO
     # method call to return to the expected level.
     class MismatchedError < Exception; end
 
-    VERSION = "0.1.0"
+    VERSION      = "0.1.0"
+    LINE_PATTERN = %r{([^\n]+)|\n}
 
     # The current indentation level
     getter indent : Int32 = 0
@@ -48,20 +49,47 @@ class IO
       raise ImplementationError.new "#{self.class} cannot read"
     end
 
+    # Writes the given object into this `IO`.
+    # This ends up calling `to_s(io)` on the object.
+    #
+    # ```
+    # io = IO::Memory.new
+    # io << 1
+    # io << '-'
+    # io << "Crystal"
+    # io.to_s # => "1-Crystal"
+    # ```
+    def <<(obj) : self
+      case obj
+      when String
+        write obj
+      else
+        obj.to_s self
+      end
+      self
+    end
+
     # Write Bytes to the wrapped `IO` object, indenting when starting a new line
     def write(slice : Bytes) : Nil
-      str = String.new(slice)
-      str.each_char do |char|
-        case char
-        when '\n'
-          @at_start_of_line = true
-        else
+      write String.new(slice)
+    end
+
+    # :nodoc:
+    def write(str : String) : Nil
+      pos = 0
+
+      while match = LINE_PATTERN.match(str, pos)
+        pos = match.end
+        if match[1]?
           if @at_start_of_line
             @io << @chars * @indent
             @at_start_of_line = false
           end
+          @io << match[1]
+        else
+          @io << '\n'
+          @at_start_of_line = true
         end
-        @io << char
       end
     end
 
